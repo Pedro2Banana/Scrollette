@@ -37,3 +37,7 @@ class PdfDocument:
         if not self._doc:
             raise RuntimeError("No PDF is open.")
         return self._doc[index]
+
+    def page_text(self, index):
+        """Extract the plain text of a single page."""
+        return self.page(index).get_text().strip()
