@@ -1,4 +1,4 @@
-from PySide6.QtCore import QEvent, Qt, QThread
+from PySide6.QtCore import QEvent, Qt, QThread, QTimer
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -14,14 +14,16 @@ from PySide6.QtWidgets import (
     QWidget,
 )
 
-from app.config import APP_DIR, WINDOW_HEIGHT, WINDOW_TITLE, WINDOW_WIDTH
+from app.config import BOOKS_DIR, WINDOW_HEIGHT, WINDOW_TITLE, WINDOW_WIDTH
 from app.llm.client import LLMClient, SYSTEM_PROMPT
 from app.llm.conversation import Conversation
+from app.rag.service import RagService
+from app.storage.reading_store import ReadingStore
 from app.reader.pdf_document import PdfDocument
 from app.reader.reading_state import ReadingState
 from app.reader.renderer import PdfRenderer
 from app.ui.chat_panel import ChatPanel
-from app.ui.llm_worker import AskWorker
+from app.ui.llm_worker import AskWorker, IndexWorker
 
 
 class ScrolletteWindow(QMainWindow):
@@ -35,13 +37,26 @@ class ScrolletteWindow(QMainWindow):
         self.document = PdfDocument()
         self.state = ReadingState()
         self.renderer = PdfRenderer()
+        self.reading_store = ReadingStore()
 
         self.llm = None  # 延迟创建：没配 key 也能开窗，首次提问时才连
         self.conversation = Conversation(SYSTEM_PROMPT)  # 多轮记忆
+        self._rag = None         # 延迟创建的 RagService
+        self._rag_ready = True   # 创建失败则置 False，不再重试
+        self._max_read_page = 0  # 读到过的最大页，companion 检索用
         self._thread = None
         self._worker = None
         self._pending_question = ""  # 本轮纯问题，回复完成后存进记忆
         self._reply_chunks = []      # 累积流式回复，用于 record
+
+        # 后台增量索引：落到某页 0.8s 后才索引，避免快速翻页时频繁触发。
+        self._indexing = False
+        self._index_thread = None
+        self._index_worker = None
+        self._index_timer = QTimer(self)
+        self._index_timer.setSingleShot(True)
+        self._index_timer.setInterval(800)
+        self._index_timer.timeout.connect(self._index_current_pages)
 
         self.open_btn = QPushButton("打开 PDF")
         self.prev_btn = QPushButton("上一页")
@@ -55,6 +70,7 @@ class ScrolletteWindow(QMainWindow):
         self.sidebar_btn.setCheckable(True)
         self.sidebar_btn.setChecked(True)
         self.page_label = QLabel("未打开")
+        self.index_label = QLabel("")  # 后台索引状态提示
 
         self.open_btn.clicked.connect(self.open_pdf)
         self.prev_btn.clicked.connect(self.prev_page)
@@ -74,6 +90,7 @@ class ScrolletteWindow(QMainWindow):
             self.fit_btn,
             self.two_page_btn,
             self.page_label,
+            self.index_label,
         ):
             toolbar.addWidget(widget)
 
@@ -137,10 +154,24 @@ class ScrolletteWindow(QMainWindow):
             return
 
         self.state.reset_for_new_document()
+        self.conversation.clear()  # 换书清空对话记忆
+        # 登记这本书 + 从库恢复阅读进度（companion 检索范围）
+        doc_id = self.document.file_hash
+        self.reading_store.upsert_document(
+            doc_id, self.document.path.name, self.document.page_count
+        )
+        self._max_read_page = self.reading_store.max_read_page(doc_id)
+        # 续读：恢复上次停留页 + 单/双页
+        last_page, two_page = self.reading_store.view_state(doc_id)
+        self.state.two_page = two_page
+        self.two_page_btn.blockSignals(True)
+        self.two_page_btn.setChecked(two_page)
+        self.two_page_btn.blockSignals(False)
+        self.state.page_index = min(max(0, last_page - 1), self.document.page_count - 1)
         self.fit_to_window()
 
     def open_pdf(self):
-        start_dir = self.document.path.parent if self.document.path else APP_DIR
+        start_dir = self.document.path.parent if self.document.path else BOOKS_DIR
         path, _ = QFileDialog.getOpenFileName(self, "选择 PDF", str(start_dir), "PDF (*.pdf)")
         if path:
             self.load_pdf(path)
@@ -164,6 +195,8 @@ class ScrolletteWindow(QMainWindow):
         )
         self.page_input.setText(str(first))
         self.total_label.setText(f"/ {self.document.page_count}")
+        self._max_read_page = max(self._max_read_page, last)
+        self._index_timer.start()  # 防抖：稳定停在本页后再后台索引
 
     def current_text(self):
         """Plain text of the currently visible page(s), for feeding the LLM."""
@@ -221,17 +254,24 @@ class ScrolletteWindow(QMainWindow):
             self.chat_panel.add_message("⚠️", f"AI 不可用：{exc}")
             return
 
-        # 带历史构造本轮请求；记下纯问题、清空回复累积。
-        messages = self.conversation.build_request(self.current_text(), text)
         self._pending_question = text
         self._reply_chunks = []
 
         self.chat_panel.set_busy(True)
         self.chat_panel.start_ai_message()
 
-        # 慢的网络请求丢给 worker 线程，主线程保持响应（可继续翻页等）。
+        # 检索 + LLM 都是网络活，整体丢给 worker 线程，主线程保持响应。
+        document_id = self.document.file_hash if self.document.is_open else None
         self._thread = QThread()
-        self._worker = AskWorker(client, messages)
+        self._worker = AskWorker(
+            client,
+            self.conversation,
+            self.current_text(),
+            text,
+            rag=self._ensure_rag(),
+            document_id=document_id,
+            max_read_page=self._max_read_page,
+        )
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
         self._worker.chunk.connect(self._on_llm_chunk)
@@ -248,6 +288,54 @@ class ScrolletteWindow(QMainWindow):
         if self.llm is None:
             self.llm = LLMClient()
         return self.llm
+
+    def _ensure_rag(self):
+        # 创建失败（如 Chroma 出错）不该挡住聊天，返回 None 即可退回纯当前页问答。
+        if self._rag is None and self._rag_ready:
+            try:
+                self._rag = RagService()
+            except Exception:
+                self._rag_ready = False
+        return self._rag
+
+    def _index_current_pages(self):
+        if not self.document.is_open:
+            return
+        if self._indexing:
+            self._index_timer.start()  # 上一批还在跑，稍后再试
+            return
+
+        indices = self.state.visible_indices(self.document.page_count)
+        document_id = self.document.file_hash
+
+        # 记阅读（停下来就算读过）——SQLite，主线程，快
+        for i in indices:
+            self.reading_store.mark_read(document_id, i + 1)
+            self._max_read_page = max(self._max_read_page, i + 1)
+        self.reading_store.save_view_state(document_id, indices[0] + 1, self.state.two_page)
+
+        # 后台向量索引（仅当 RAG 可用）
+        rag = self._ensure_rag()
+        if not rag:
+            return
+        pages = [(i + 1, self.document.page_text(i)) for i in indices]
+        self._indexing = True
+        self.index_label.setText("索引中…")
+        self._index_thread = QThread()
+        self._index_worker = IndexWorker(rag, document_id, pages)
+        self._index_worker.moveToThread(self._index_thread)
+        self._index_thread.started.connect(self._index_worker.run)
+        self._index_worker.done.connect(self._on_index_finished)
+        self._index_worker.failed.connect(self._on_index_finished)
+        self._index_worker.done.connect(self._index_thread.quit)
+        self._index_worker.failed.connect(self._index_thread.quit)
+        self._index_thread.finished.connect(self._index_worker.deleteLater)
+        self._index_thread.finished.connect(self._index_thread.deleteLater)
+        self._index_thread.start()
+
+    def _on_index_finished(self, *args):
+        self._indexing = False
+        self.index_label.setText("")
 
     def _on_llm_chunk(self, piece):
         self._reply_chunks.append(piece)
@@ -295,5 +383,10 @@ class ScrolletteWindow(QMainWindow):
         return super().eventFilter(obj, event)
 
     def closeEvent(self, event):
+        if self.document.is_open:
+            self.reading_store.save_view_state(
+                self.document.file_hash, self.state.page_index + 1, self.state.two_page
+            )
         self.document.close()
+        self.reading_store.close()
         super().closeEvent(event)

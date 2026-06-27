@@ -1,3 +1,4 @@
+import hashlib
 from pathlib import Path
 
 import fitz
@@ -9,6 +10,7 @@ class PdfDocument:
     def __init__(self):
         self.path: Path | None = None
         self._doc: fitz.Document | None = None
+        self._file_hash: str | None = None
 
     def open(self, path):
         pdf_path = Path(path)
@@ -24,6 +26,7 @@ class PdfDocument:
             self._doc.close()
         self._doc = None
         self.path = None
+        self._file_hash = None
 
     @property
     def is_open(self):
@@ -41,3 +44,13 @@ class PdfDocument:
     def page_text(self, index):
         """Extract the plain text of a single page."""
         return self.page(index).get_text().strip()
+
+    @property
+    def file_hash(self):
+        """Stable id for the open file (sha1 of its bytes); used as document_id.
+        Cached after first access."""
+        if not self.path:
+            return None
+        if self._file_hash is None:
+            self._file_hash = hashlib.sha1(self.path.read_bytes()).hexdigest()
+        return self._file_hash
