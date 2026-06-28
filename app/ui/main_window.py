@@ -1,4 +1,7 @@
-from PySide6.QtCore import QEvent, Qt, QThread, QTimer
+import datetime
+import logging
+
+from PySide6.QtCore import QEvent, QPointF, Qt, QThread, QTimer
 from PySide6.QtGui import QKeySequence, QPixmap, QShortcut
 from PySide6.QtWidgets import (
     QFileDialog,
@@ -25,6 +28,8 @@ from app.reader.renderer import PdfRenderer
 from app.ui.chat_panel import ChatPanel
 from app.ui.llm_worker import AskWorker, IndexWorker
 
+logger = logging.getLogger(__name__)
+
 
 class ScrolletteWindow(QMainWindow):
     """Main reader window."""
@@ -48,6 +53,8 @@ class ScrolletteWindow(QMainWindow):
         self._worker = None
         self._pending_question = ""  # 本轮纯问题，回复完成后存进记忆
         self._reply_chunks = []      # 累积流式回复，用于 record
+        self._panning = False        # 是否正在拖动平移页面
+        self._pan_start = None
 
         # 后台增量索引：落到某页 0.8s 后才索引，避免快速翻页时频繁触发。
         self._indexing = False
@@ -107,6 +114,7 @@ class ScrolletteWindow(QMainWindow):
         self.scroll.setWidget(self.page_view)
         self.scroll.setAlignment(Qt.AlignCenter)
         self.scroll.viewport().installEventFilter(self)
+        self.scroll.viewport().setCursor(Qt.OpenHandCursor)  # 提示可拖动
 
         # 阅读区底部居中的翻页条：[上一页] [页码输入] /总页数 [下一页]
         self.page_input = QLineEdit()
@@ -220,14 +228,27 @@ class ScrolletteWindow(QMainWindow):
         self.render_page()
 
     def zoom_in(self):
-        if self.document.is_open:
-            self.state.zoom *= 1.2
-            self.render_page()
+        self._zoom_at(1.2, self._viewport_center())
 
     def zoom_out(self):
-        if self.document.is_open:
-            self.state.zoom /= 1.2
-            self.render_page()
+        self._zoom_at(1 / 1.2, self._viewport_center())
+
+    def _viewport_center(self):
+        vp = self.scroll.viewport()
+        return QPointF(vp.width() / 2, vp.height() / 2)
+
+    def _zoom_at(self, factor, viewport_pos):
+        """Zoom keeping the content point under ``viewport_pos`` fixed on screen."""
+        if not self.document.is_open:
+            return
+        old_zoom = self.state.zoom
+        # 光标下的点，在缩放前的“内容坐标”里的位置
+        point = self.page_view.mapFrom(self.scroll.viewport(), viewport_pos.toPoint())
+        self.state.zoom = max(0.1, old_zoom * factor)
+        self.render_page()
+        scale = self.state.zoom / old_zoom
+        self.scroll.horizontalScrollBar().setValue(int(point.x() * scale - viewport_pos.x()))
+        self.scroll.verticalScrollBar().setValue(int(point.y() * scale - viewport_pos.y()))
 
     def toggle_two_page(self, checked):
         self.state.two_page = checked
@@ -256,12 +277,14 @@ class ScrolletteWindow(QMainWindow):
 
         self._pending_question = text
         self._reply_chunks = []
+        logger.info("收到提问（当前页范围≤%d）：%s", self._max_read_page, text)
 
         self.chat_panel.set_busy(True)
         self.chat_panel.start_ai_message()
 
-        # 检索 + LLM 都是网络活，整体丢给 worker 线程，主线程保持响应。
+        # 检索 + LLM + 工具循环都是慢活，整体丢给 worker 线程，主线程保持响应。
         document_id = self.document.file_hash if self.document.is_open else None
+        today = datetime.datetime.now().strftime("%Y-%m-%d")
         self._thread = QThread()
         self._worker = AskWorker(
             client,
@@ -269,8 +292,10 @@ class ScrolletteWindow(QMainWindow):
             self.current_text(),
             text,
             rag=self._ensure_rag(),
+            store=self.reading_store,
             document_id=document_id,
             max_read_page=self._max_read_page,
+            today=today,
         )
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)
@@ -375,10 +400,25 @@ class ScrolletteWindow(QMainWindow):
 
     def eventFilter(self, obj, event):
         if event.type() == QEvent.Wheel and (event.modifiers() & Qt.ControlModifier):
-            if event.angleDelta().y() > 0:
-                self.zoom_in()
-            else:
-                self.zoom_out()
+            factor = 1.2 if event.angleDelta().y() > 0 else 1 / 1.2
+            self._zoom_at(factor, event.position())  # 以光标位置为焦点
+            return True
+        # 拖动平移：按下记录起点 + 当前滚动量；移动时反向调滚动条。
+        if event.type() == QEvent.MouseButtonPress and event.button() == Qt.LeftButton:
+            self._panning = True
+            self._pan_start = event.position()
+            self._pan_h = self.scroll.horizontalScrollBar().value()
+            self._pan_v = self.scroll.verticalScrollBar().value()
+            self.scroll.viewport().setCursor(Qt.ClosedHandCursor)
+            return True
+        if event.type() == QEvent.MouseMove and self._panning:
+            delta = event.position() - self._pan_start
+            self.scroll.horizontalScrollBar().setValue(self._pan_h - int(delta.x()))
+            self.scroll.verticalScrollBar().setValue(self._pan_v - int(delta.y()))
+            return True
+        if event.type() == QEvent.MouseButtonRelease and event.button() == Qt.LeftButton:
+            self._panning = False
+            self.scroll.viewport().setCursor(Qt.OpenHandCursor)
             return True
         return super().eventFilter(obj, event)
 

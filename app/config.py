@@ -25,6 +25,9 @@ DATA_DIR = APP_DIR / "data"
 # SQLite（阅读元数据等）
 DB_PATH = DATA_DIR / "scrollette.db"
 
+# 日志
+LOG_DIR = DATA_DIR / "logs"
+
 # RAG 向量库（Chroma 本地持久化）
 RAG_INDEX_DIR = DATA_DIR / "rag_index"
 RAG_COLLECTION = "document_chunks"

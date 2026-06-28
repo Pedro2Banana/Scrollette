@@ -1,14 +1,17 @@
 from PySide6.QtCore import QObject, Signal
 
+from app.agent.loop import run_agent
+from app.agent.tools import build_registry
+
 
 class AskWorker(QObject):
-    """Produces one answer off the main thread: (optional) RAG retrieval →
-    build the request → stream the LLM reply. All network work lives here so
-    the UI never freezes. Lives in the UI layer so ``app/llm`` stays Qt-free."""
+    """Produces one answer off the main thread: build the tool registry for the
+    current reading context, then run the agent loop (it decides which tools to
+    call). All network work lives here so the UI never freezes."""
 
-    chunk = Signal(str)     # 流式：每次一小段回复文本
-    finished = Signal()     # 成功：整段结束（文本已通过 chunk 逐段发出）
-    failed = Signal(str)    # 失败：携带错误信息
+    chunk = Signal(str)     # 本版非流式：整段回复一次性发出
+    finished = Signal()
+    failed = Signal(str)
 
     def __init__(
         self,
@@ -16,9 +19,11 @@ class AskWorker(QObject):
         conversation,
         page_text,
         question,
-        rag=None,
-        document_id=None,
-        max_read_page=None,
+        rag,
+        store,
+        document_id,
+        max_read_page,
+        today,
     ):
         super().__init__()
         self._client = client
@@ -26,21 +31,21 @@ class AskWorker(QObject):
         self._page_text = page_text
         self._question = question
         self._rag = rag
+        self._store = store
         self._document_id = document_id
         self._max_read_page = max_read_page
+        self._today = today
 
     def run(self):
         try:
-            chunks = None
-            if self._rag and self._document_id:
-                chunks = self._rag.retrieve(
-                    self._question, self._document_id, self._max_read_page
-                )
-            messages = self._conversation.build_request(
-                self._page_text, self._question, chunks
+            registry = build_registry(
+                self._rag, self._store, self._document_id, self._max_read_page
             )
-            for piece in self._client.ask_stream(messages):
-                self.chunk.emit(piece)
+            messages = self._conversation.build_request(
+                self._page_text, self._question, self._today
+            )
+            answer = run_agent(self._client, registry, messages)
+            self.chunk.emit(answer)
             self.finished.emit()
         except Exception as exc:  # 网络/鉴权等任何异常都不该让程序崩
             self.failed.emit(str(exc))
