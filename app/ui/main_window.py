@@ -40,6 +40,7 @@ class ScrolletteWindow(QMainWindow):
         self.resize(WINDOW_WIDTH, WINDOW_HEIGHT)
 
         self.document = PdfDocument()
+        self._text_reader = PdfDocument()  # 独立只读句柄，供 agent 在 worker 线程取文本（办法B）
         self.state = ReadingState()
         self.renderer = PdfRenderer()
         self.reading_store = ReadingStore()
@@ -57,6 +58,7 @@ class ScrolletteWindow(QMainWindow):
         self._pan_start = None
 
         # 后台增量索引：落到某页 0.8s 后才索引，避免快速翻页时频繁触发。
+        self._last_settled_pages = None  # 上次处理过的可见页；没变就不重复处理
         self._indexing = False
         self._index_thread = None
         self._index_worker = None
@@ -160,8 +162,10 @@ class ScrolletteWindow(QMainWindow):
             self.document.open(path)
         except FileNotFoundError:
             return
+        self._text_reader.open(path)  # 同一文件、独立句柄
 
         self.state.reset_for_new_document()
+        self._last_settled_pages = None
         self.conversation.clear()  # 换书清空对话记忆
         # 登记这本书 + 从库恢复阅读进度（companion 检索范围）
         doc_id = self.document.file_hash
@@ -293,6 +297,7 @@ class ScrolletteWindow(QMainWindow):
             text,
             rag=self._ensure_rag(),
             store=self.reading_store,
+            text_reader=self._text_reader,
             document_id=document_id,
             max_read_page=self._max_read_page,
             today=today,
@@ -326,11 +331,14 @@ class ScrolletteWindow(QMainWindow):
     def _index_current_pages(self):
         if not self.document.is_open:
             return
-        if self._indexing:
-            self._index_timer.start()  # 上一批还在跑，稍后再试
-            return
-
         indices = self.state.visible_indices(self.document.page_count)
+        pages_key = tuple(indices)
+        if pages_key == self._last_settled_pages:
+            return  # 可见页没变（只是缩放/拖动）——不重复记录/检查
+        if self._indexing:
+            self._index_timer.start()  # 索引中，稍后再判断（先不更新 last_settled）
+            return
+        self._last_settled_pages = pages_key
         document_id = self.document.file_hash
 
         # 记阅读（停下来就算读过）——SQLite，主线程，快
@@ -343,11 +351,21 @@ class ScrolletteWindow(QMainWindow):
         rag = self._ensure_rag()
         if not rag:
             return
-        pages = [(i + 1, self.document.page_text(i)) for i in indices]
+        # 先判断哪些页还没索引：已索引的跳过、不弹“索引中”
+        todo = []
+        for i in indices:
+            page = i + 1
+            if rag.has_page(document_id, page):
+                logger.info("第 %d 页：已索引，跳过", page)
+            else:
+                logger.info("第 %d 页：未索引，开始索引", page)
+                todo.append((page, self.document.page_text(i)))
+        if not todo:
+            return
         self._indexing = True
         self.index_label.setText("索引中…")
         self._index_thread = QThread()
-        self._index_worker = IndexWorker(rag, document_id, pages)
+        self._index_worker = IndexWorker(rag, document_id, todo)
         self._index_worker.moveToThread(self._index_thread)
         self._index_thread.started.connect(self._index_worker.run)
         self._index_worker.done.connect(self._on_index_finished)
@@ -428,5 +446,6 @@ class ScrolletteWindow(QMainWindow):
                 self.document.file_hash, self.state.page_index + 1, self.state.two_page
             )
         self.document.close()
+        self._text_reader.close()
         self.reading_store.close()
         super().closeEvent(event)

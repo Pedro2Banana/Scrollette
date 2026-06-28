@@ -21,6 +21,7 @@ class AskWorker(QObject):
         question,
         rag,
         store,
+        text_reader,
         document_id,
         max_read_page,
         today,
@@ -32,6 +33,7 @@ class AskWorker(QObject):
         self._question = question
         self._rag = rag
         self._store = store
+        self._text_reader = text_reader
         self._document_id = document_id
         self._max_read_page = max_read_page
         self._today = today
@@ -39,7 +41,12 @@ class AskWorker(QObject):
     def run(self):
         try:
             registry = build_registry(
-                self._rag, self._store, self._document_id, self._max_read_page
+                self._rag,
+                self._store,
+                self._text_reader,
+                self._client,
+                self._document_id,
+                self._max_read_page,
             )
             messages = self._conversation.build_request(
                 self._page_text, self._question, self._today

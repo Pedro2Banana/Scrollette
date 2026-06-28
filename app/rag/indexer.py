@@ -1,4 +1,8 @@
+import logging
+
 from app.rag.chunker import chunk_page
+
+logger = logging.getLogger(__name__)
 
 
 class Indexer:
@@ -22,4 +26,5 @@ class Indexer:
             return 0
         vectors = self._embedder.embed([c.text for c in chunks])
         self._store.upsert(chunks, vectors, document_id)
+        logger.info("第 %d 页：索引完成（%d 块）", page_number, len(chunks))
         return len(chunks)

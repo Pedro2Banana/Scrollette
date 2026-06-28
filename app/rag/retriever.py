@@ -12,13 +12,21 @@ class Retriever:
         self._embedder = embedder
         self._store = store
 
-    def retrieve(self, query, document_id, max_read_page=None, k=RAG_TOP_K):
-        where = self._build_where(document_id, max_read_page)
+    def retrieve(self, query, document_id, max_read_page=None, page_numbers=None, k=RAG_TOP_K):
+        where = self._build_where(document_id, max_read_page, page_numbers)
         vector = self._embedder.embed_one(query)
         return self._store.query(vector, k=k, where=where)
 
     @staticmethod
-    def _build_where(document_id, max_read_page):
+    def _build_where(document_id, max_read_page, page_numbers=None):
+        # 显式页码集合优先；其次按已读范围；都没有则全文。
+        if page_numbers:
+            return {
+                "$and": [
+                    {"document_id": document_id},
+                    {"page_number": {"$in": list(page_numbers)}},
+                ]
+            }
         if max_read_page is None:
             return {"document_id": document_id}
         return {
