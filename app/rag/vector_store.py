@@ -35,22 +35,37 @@ class VectorStore:
         )
 
     def query(self, vector, k=5, where=None):
-        """Return up to k nearest chunks as dicts {text, page_number, distance}."""
+        """Return up to k nearest chunks as dicts {id, text, page_number, distance}."""
         result = self._collection.query(
             query_embeddings=[vector], n_results=k, where=where
         )
         hits = []
-        for text, meta, distance in zip(
-            result["documents"][0], result["metadatas"][0], result["distances"][0]
+        for cid, text, meta, distance in zip(
+            result["ids"][0],
+            result["documents"][0],
+            result["metadatas"][0],
+            result["distances"][0],
         ):
             hits.append(
                 {
+                    "id": cid,
                     "text": text,
                     "page_number": meta["page_number"],
                     "distance": distance,
                 }
             )
         return hits
+
+    def get_chunks(self, document_id):
+        """All chunks of a document as dicts {id, text, page_number} — for
+        building the lexical (BM25) index."""
+        result = self._collection.get(where={"document_id": document_id})
+        return [
+            {"id": cid, "text": text, "page_number": meta["page_number"]}
+            for cid, text, meta in zip(
+                result["ids"], result["documents"], result["metadatas"]
+            )
+        ]
 
     def has_page(self, document_id, page_number):
         """Whether this page already has chunks indexed (skip re-embedding)."""

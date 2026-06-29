@@ -1,6 +1,7 @@
 import logging
 
 from app.agent.tool import Tool
+from app.prompts import SUMMARY_MAP_PROMPT, SUMMARY_REDUCE_PROMPT
 
 logger = logging.getLogger(__name__)
 
@@ -9,14 +10,8 @@ BATCH_CHARS = 6000       # map 阶段每批的目标字数
 
 
 def _summarize_text(client, text, reduce=False):
-    if reduce:
-        prompt = (
-            "下面是同一份阅读内容的分段小结，请合并成一份连贯、简洁的中文总结，"
-            "保留涉及的页码：\n\n" + text
-        )
-    else:
-        prompt = "请用简洁中文概括下面的内容，保留关键信息和它出现的页码：\n\n" + text
-    msg = client.chat([{"role": "user", "content": prompt}])
+    prefix = SUMMARY_REDUCE_PROMPT if reduce else SUMMARY_MAP_PROMPT
+    msg = client.chat([{"role": "user", "content": prefix + text}])
     return (msg.content or "").strip()
 
 

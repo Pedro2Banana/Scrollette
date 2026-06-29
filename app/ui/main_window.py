@@ -18,8 +18,9 @@ from PySide6.QtWidgets import (
 )
 
 from app.config import BOOKS_DIR, WINDOW_HEIGHT, WINDOW_TITLE, WINDOW_WIDTH
-from app.llm.client import LLMClient, SYSTEM_PROMPT
+from app.llm.client import LLMClient
 from app.llm.conversation import Conversation
+from app.prompts import BOOK_QA_PROMPT
 from app.rag.service import RagService
 from app.storage.reading_store import ReadingStore
 from app.reader.pdf_document import PdfDocument
@@ -46,7 +47,7 @@ class ScrolletteWindow(QMainWindow):
         self.reading_store = ReadingStore()
 
         self.llm = None  # 延迟创建：没配 key 也能开窗，首次提问时才连
-        self.conversation = Conversation(SYSTEM_PROMPT)  # 多轮记忆
+        self.conversation = Conversation(BOOK_QA_PROMPT)  # 多轮记忆
         self._rag = None         # 延迟创建的 RagService
         self._rag_ready = True   # 创建失败则置 False，不再重试
         self._max_read_page = 0  # 读到过的最大页，companion 检索用
@@ -301,6 +302,7 @@ class ScrolletteWindow(QMainWindow):
             document_id=document_id,
             max_read_page=self._max_read_page,
             today=today,
+            book_name=self.document.path.name if self.document.is_open else "",
         )
         self._worker.moveToThread(self._thread)
         self._thread.started.connect(self._worker.run)

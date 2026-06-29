@@ -2,3 +2,5 @@ PySide6
 PyMuPDF
 openai
 chromadb
+rank_bm25
+jieba

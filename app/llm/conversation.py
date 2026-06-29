@@ -35,6 +35,10 @@ class Conversation:
         self._turns.append({"role": "assistant", "content": answer})
         self._trim()
 
+    def history(self):
+        """Recent turns (copy) — for handlers that build their own request."""
+        return list(self._turns)
+
     def _trim(self):
         limit = self._max_turns * 2  # user + assistant 成对
         if len(self._turns) > limit:

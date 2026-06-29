@@ -2,6 +2,7 @@ import threading
 
 from app.rag.embedder import Embedder
 from app.rag.indexer import Indexer
+from app.rag.lexical import LexicalIndex
 from app.rag.retriever import Retriever
 from app.rag.vector_store import VectorStore
 
@@ -18,7 +19,8 @@ class RagService:
         embedder = Embedder()
         store = VectorStore()
         self._store = store
-        self._retriever = Retriever(embedder, store)
+        self._lexical = LexicalIndex(store)
+        self._retriever = Retriever(embedder, store, self._lexical)
         self._indexer = Indexer(embedder, store)
         self._lock = threading.Lock()
 
@@ -37,4 +39,7 @@ class RagService:
 
     def index_page(self, document_id, page_number, text):
         with self._lock:
-            return self._indexer.index_page(document_id, page_number, text)
+            added = self._indexer.index_page(document_id, page_number, text)
+            if added:
+                self._lexical.invalidate()  # 语料变了，BM25 缓存失效
+            return added
