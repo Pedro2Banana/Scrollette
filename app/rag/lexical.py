@@ -1,5 +1,9 @@
+import logging
+
 import jieba
 from rank_bm25 import BM25Okapi
+
+logger = logging.getLogger(__name__)
 
 
 def _tokenize(text):
@@ -38,9 +42,11 @@ class LexicalIndex:
         if self._bm25 is not None and self._doc_id == document_id:
             return
         self._chunks = self._store.get_chunks(document_id)
+        logger.info("===== 开始构建 BM25 词法索引（分词 %d 个 chunk）…", len(self._chunks))
         corpus = [_tokenize(c["text"]) for c in self._chunks]
         self._bm25 = BM25Okapi(corpus) if corpus else None
         self._doc_id = document_id
+        logger.info("===== BM25 词法索引构建完成（%d 个 chunk）", len(self._chunks))
 
     def invalidate(self):
         self._bm25 = None  # 下次检索时重建（有新页索引后调用）

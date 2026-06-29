@@ -132,5 +132,22 @@ class ReadingStore:
             ).fetchall()
         return [row[0] for row in rows]
 
+    def list_documents(self):
+        """Books the user has actually read (have page_reads): {id, file_name, page_count}."""
+        with self._lock:
+            rows = self._conn.execute(
+                "SELECT d.id, d.file_name, d.page_count FROM documents d "
+                "WHERE EXISTS (SELECT 1 FROM page_reads p WHERE p.document_id = d.id) "
+                "ORDER BY d.last_opened_at DESC"
+            ).fetchall()
+        return [{"id": r[0], "file_name": r[1], "page_count": r[2]} for r in rows]
+
+    def document_id_by_name(self, file_name):
+        with self._lock:
+            row = self._conn.execute(
+                "SELECT id FROM documents WHERE file_name = ?", (file_name,)
+            ).fetchone()
+        return row[0] if row else None
+
     def close(self):
         self._conn.close()
