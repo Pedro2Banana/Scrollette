@@ -1,0 +1,242 @@
+[
+  {
+    "question": "智能体在人工智能领域的基本定义是什么？",
+    "pages": [10],
+    "type": "definition",
+    "note": "智能体被定义为任何能够通过传感器（Sensors）感知其所处环境（Environment），并自主地通过执行器（Actuators）采取行动（Action）以达成特定目标的实体。"
+  },
+  {
+    "question": "为什么自主性是智能体真正具备“智能”的关键？",
+    "pages": [10],
+    "type": "concept",
+    "note": "真正赋予智能体\"智能\"的，是其自主性（Autonomy）。"
+  },
+  {
+    "question": "简单反射智能体为什么无法处理需要上下文的任务？",
+    "pages": [11],
+    "type": "concept",
+    "note": "这种智能体完全依赖于当前的感知输入，不具备记忆或预测能力。它像一种数字化的本能，可靠且高效，但也因此无法应对需要理解上下文的复杂任务。"
+  },
+  {
+    "question": "基于模型的反射智能体用什么机制弥补瞬时感知的不足？",
+    "pages": [11],
+    "type": "term",
+    "note": "这类智能体拥有一个内部的世界模型（World Model），用于追踪和理解环境中那些无法被直接感知的方面。"
+  },
+  {
+    "question": "GPS 导航系统为什么可以看作基于目标的智能体？",
+    "pages": [11],
+    "type": "detail",
+    "note": "经典的例子是 GPS 导航系统：你的目标是到达公司，智能体会基于地图数据（世界模型），通过搜索算法（如 A*算法）来规划（Planning）出一条最优路径。"
+  },
+  {
+    "question": "基于效用的智能体和只追求单一目标的智能体有什么不同？",
+    "pages": [11],
+    "type": "compare",
+    "note": "当多个目标需要权衡时，基于效用的智能体（Utility-Based Agent）便随之出现。它为每一个可能的世界状态都赋予一个效用值，这个值代表了满意度的高低。"
+  },
+  {
+    "question": "AlphaGo Zero 用什么方法发现超越人类既有知识的策略？",
+    "pages": [11],
+    "type": "term",
+    "note": "AlphaGo Zero 是这一理念的一个里程碑式的成就。它在围棋这一复杂博弈中，通过强化学习发现了许多超越人类既有知识的有效策略。"
+  },
+  {
+    "question": "传统智能体和 LLM 智能体的能力来源有什么本质差异？",
+    "pages": [12],
+    "type": "compare",
+    "note": "传统智能体的能力源于工程师的显式编程与知识构建，其行为模式是确定且有边界的"
+  },
+  {
+    "question": "智能旅行助手如何体现 LLM 智能体的工具使用能力？",
+    "pages": [12],
+    "type": "detail",
+    "note": "主动调用外部工具来补全。"
+  },
+  {
+    "question": "反应式智能体的优势和代价分别是什么？",
+    "pages": [13],
+    "type": "compare",
+    "note": "其核心优势在于速度快、计算开销低，这在需要快速决策的动态环境中至关重要。"
+  },
+  {
+    "question": "规划式智能体为什么适合处理长期复杂任务？",
+    "pages": [13],
+    "type": "concept",
+    "note": "系统地探索未来的各种可能性，评估不同行动序列的后果，以期找到一条能够达成目标的最佳路径。"
+  },
+  {
+    "question": "现代 LLM 智能体如何把规划性和反应性结合起来？",
+    "pages": [14],
+    "type": "concept",
+    "note": "思考-行动-观察”的循环中运作"
+  },
+  {
+    "question": "符号主义 AI 的主要优势和脆弱点是什么？",
+    "pages": [14],
+    "type": "compare",
+    "note": "主要优势在于透明和可解释。"
+  },
+  {
+    "question": "亚符号主义 AI 为什么常被称为黑箱？",
+    "pages": [14],
+    "type": "concept",
+    "note": "亚符号主义系统通常被视为一个黑箱（Black Box）。它能以惊人的准确率识别出图片中的猫，但你若问它“为什么你认为这是猫？”，它很可能无法给出一个合乎逻辑的解释。"
+  },
+  {
+    "question": "PEAS 模型用哪四个要素描述智能体的任务环境？",
+    "pages": [15],
+    "type": "definition",
+    "note": "通常使用PEAS 模型来精确描述一个任务环境，即分析其性能度量(Performance)、环境(Environment)、执行器(Actuators)和传感器(Sensors) 。"
+  },
+  {
+    "question": "为什么旅行助手的任务环境可以被看作随机性环境？",
+    "pages": [15],
+    "type": "concept",
+    "note": "典型的随机性环境。"
+  },
+  {
+    "question": "智能体循环包含哪些核心阶段？",
+    "pages": [16],
+    "type": "definition",
+    "note": "感知 (Perception)：这是循环的起点。智能体通过其传感器（例如，API 的监听端口、用户输入接口）接收来自环境的输入信息。"
+  },
+  {
+    "question": "Thought-Action-Observation 循环如何把语言推理和外部工具结合起来？",
+    "pages": [17],
+    "type": "concept",
+    "note": "通过这个由 Thought、Action、Observation 构成的严谨循环，LLM 智能体得以将内部的语言推理能力，与外部环境的真实信息和工具操作能力有效地结合起来。"
+  },
+  {
+    "question": "第一章的智能旅行助手案例需要调用哪两个工具完成任务？",
+    "pages": [18],
+    "type": "term",
+    "note": "可用工具: - `get_weather(city: str)`: 查询指定城市的实时天气。 - `get_attraction(city: str, weather: str)`: 根据城市和天气搜索推荐的旅游景点。"
+  },
+  {
+    "question": "Workflow 和 Agent 的核心差异可以怎样概括？",
+    "pages": [25],
+    "type": "compare",
+    "note": "简单来说，Workflow 是让 AI 按部就班地执行指令，而 Agent 则是赋予 AI 自由度去自主达成目标。"
+  },
+  {
+    "question": "第二章为什么要回溯智能体的发展历史？",
+    "pages": [29],
+    "type": "concept",
+    "note": "为了深刻理解现代智能体为何呈现出如今的形态，以及其核心设计思想的由来"
+  },
+  {
+    "question": "物理符号系统假说包含哪两个核心论断？",
+    "pages": [29],
+    "type": "definition",
+    "note": "该假说包含两个核心论断"
+  },
+  {
+    "question": "PSSH 对智能本质的核心主张是什么？",
+    "pages": [30],
+    "type": "term",
+    "note": "智能的本质，就是符号的计算与处理。"
+  },
+  {
+    "question": "专家系统通常由哪些核心部分构成？",
+    "pages": [30],
+    "type": "definition",
+    "note": "一个典型的专家系统通常由知识库、推理机、用户界面等几个核心部分构成"
+  },
+  {
+    "question": "专家系统中的知识库通常如何表示专家知识？",
+    "pages": [31],
+    "type": "detail",
+    "note": "最常用的一种知识表示方法是产生式规则（Production Rules）"
+  },
+  {
+    "question": "正向链和反向链推理的驱动方式有什么区别？",
+    "pages": [31],
+    "type": "compare",
+    "note": "正向链（Forward Chaining）：从已知事实出发"
+  },
+  {
+    "question": "MYCIN 为什么引入置信因子？",
+    "pages": [32],
+    "type": "concept",
+    "note": "医学诊断充满了不确定性。MYCIN的一个重要创新是引入了置信因子"
+  },
+  {
+    "question": "SHRDLU 的积木世界主要想验证什么能力？",
+    "pages": [32],
+    "type": "term",
+    "note": "通过自然语言与人类流畅交互的综合性智能体"
+  },
+  {
+    "question": "SHRDLU 在现代智能体研究中的历史意义是什么？",
+    "pages": [33],
+    "type": "concept",
+    "note": "其“感知-思考-行动”的闭环设计，奠定了现代智能体研究的基础。"
+  },
+  {
+    "question": "符号主义 AI 面临的知识获取瓶颈是什么？",
+    "pages": [33],
+    "type": "concept",
+    "note": "专家系统的知识需要由人类专家和知识工程师通过繁琐的访谈、提炼和编码过程来构建。"
+  },
+  {
+    "question": "ELIZA 的 DOCTOR 脚本模仿的是什么角色？",
+    "pages": [34],
+    "type": "term",
+    "note": "它模仿了一位罗杰斯学派的非指导性心理治疗师。"
+  },
+  {
+    "question": "ELIZA 的算法流程基于哪两个核心技术？",
+    "pages": [34],
+    "type": "definition",
+    "note": "ELIZA的算法流程基于模式匹配（Pattern Matching）与文本替换（Text Substitution）"
+  },
+  {
+    "question": "规则驱动聊天机器人为什么难以进行连贯多轮对话？",
+    "pages": [37],
+    "type": "concept",
+    "note": "系统是无状态的（Stateless），每次回应仅基于当前单句输入"
+  },
+  {
+    "question": "明斯基的心智社会理论如何理解智能的来源？",
+    "pages": [37],
+    "type": "concept",
+    "note": "The power of intelligence stems from our vast diversity, not from any single, perfect principle."
+  },
+  {
+    "question": "心智社会理论中的 Agency 是什么？",
+    "pages": [38],
+    "type": "definition",
+    "note": "一个机构是一组协同工作的智能体，旨在完成一个更复杂的任务。"
+  },
+  {
+    "question": "心智社会理论中的涌现是什么意思？",
+    "pages": [38],
+    "type": "concept",
+    "note": "复杂的、有目的性的智能行为，并非由某个高级智能体预先规划"
+  },
+  {
+    "question": "心智社会理论如何启发多智能体系统研究？",
+    "pages": [39],
+    "type": "concept",
+    "note": "如何设计一个高效协作的智能体群体"
+  },
+  {
+    "question": "多智能体系统中的去中心化控制思想来自哪里？",
+    "pages": [39],
+    "type": "term",
+    "note": "理论的核心在于不存在中央控制器。"
+  },
+  {
+    "question": "联结主义和符号主义在设计哲学上有什么差异？",
+    "pages": [40],
+    "type": "compare",
+    "note": "与符号主义自上而下、依赖明确逻辑规则的设计哲学不同，联结主义是一种自下而上的方法"
+  },
+  {
+    "question": "联结主义认为知识以什么形式存储？",
+    "pages": [40],
+    "type": "definition",
+    "note": "知识并非以明确的符号或规则形式存储在某个知识库中，而是以连接权重的形式"
+  }
+]
